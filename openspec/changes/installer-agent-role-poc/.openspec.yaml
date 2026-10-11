@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-10-11
+goal: Определить и валидировать минимальный PoC проектного установщика и шести
+  исполнимых ролей subagent (analyst, architect, developer, code-reviewer, qa,
+  devops) для инициализации новых проектов по утверждённому workflow; без
+  реализации продукта-скрапера.
+skip_specs: true
