@@ -3,7 +3,7 @@
 PROVISIONAL: a fixture-level prototype to validate D3 primitives.
 It is NOT the final D3/P6a installer contract and NOT a production installer.
 
-Stdlib only. Frontmatter is parsed line-wise for scalar fields only
+Stdlib only. Frontmatter is parsed conservatively for scalar fields only
 (a documented PoC simplification; formal frontmatter handling is P4/P6a).
 """
 
@@ -13,10 +13,12 @@ import hashlib
 import json
 import os
 import shutil
-from typing import Optional
+import uuid
+from typing import Optional, Tuple
 
 MARK_BEGIN = "<!-- BEGIN {block_id} -->"
 MARK_END = "<!-- END {block_id} -->"
+VALID_OWNERSHIP = ("whole-file", "json-keys", "marked-block", "frontmatter-fields")
 
 
 class InstallerError(Exception):
@@ -35,28 +37,42 @@ def canonical_json(obj) -> bytes:
     return json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
 
 
-def parse_frontmatter(text: str) -> dict:
-    """Minimal scalar frontmatter parser (PoC). Handles 'key: value' scalars only."""
+def parse_frontmatter(text: str) -> Tuple[dict, str, bool]:
+    """Conservative frontmatter parser.
+
+    Returns (fields, body, has_valid_frontmatter). Only treats a document as
+    frontmatter-bearing when line 0 is exactly `---` and a later line is exactly
+    `---`. Otherwise the whole text is returned as body (nothing is discarded),
+    which avoids misreading Markdown horizontal rules (`---`) as frontmatter.
+    """
     if not text.startswith("---"):
-        return {}
-    end = text.find("\n---", 3)
-    if end == -1:
-        return {}
-    out = {}
-    for line in text[3:end].splitlines():
-        line = line.rstrip("\n")
+        return {}, text, False
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return {}, text, False
+    close = None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            close = i
+            break
+    if close is None:
+        return {}, text, False
+    fields = {}
+    for line in lines[1:close]:
+        line = line.rstrip("\r")
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         if ": " in line:
             k, v = line.split(": ", 1)
-            out[k.strip()] = v.strip()
-    return out
+            fields[k.strip()] = v.strip()
+    body = "\n".join(lines[close + 1:])
+    return fields, body, True
 
 
-def render_frontmatter(fm: dict, body: str) -> str:
+def render_frontmatter(fields: dict, body: str) -> str:
     lines = ["---"]
-    for k in sorted(fm.keys()):
-        lines.append(f"{k}: {fm[k]}")
+    for k in sorted(fields.keys()):
+        lines.append(f"{k}: {fields[k]}")
     lines.append("---")
     text = "\n".join(lines) + "\n"
     if body.strip():
@@ -71,7 +87,7 @@ def desired_canonical(entry: dict) -> bytes:
     if kind in ("json-keys", "frontmatter-fields"):
         return canonical_json(entry["desired"])
     if kind == "marked-block":
-        return entry["desired"].encode()
+        return entry["desired"].strip().encode()
     raise InstallerError(f"unknown ownership type: {kind!r}")
 
 
@@ -92,17 +108,19 @@ def current_canonical(entry: dict, target_root: str) -> Optional[bytes]:
     if kind == "marked-block":
         with open(path, encoding="utf-8") as f:
             text = f.read()
-        b = MARK_BEGIN.format(block_id=entry.get("blockId", "pi-pipeline-setup"))
-        e = MARK_END.format(block_id=entry.get("blockId", "pi-pipeline-setup"))
+        b = MARK_BEGIN.format(block_id=entry["blockId"])
+        e = MARK_END.format(block_id=entry["blockId"])
         if b in text and e in text:
-            return text.split(b, 1)[1].split(e, 1)[0].strip("\n").encode()
+            return text.split(b, 1)[1].split(e, 1)[0].strip().encode()
         return b""
     if kind == "frontmatter-fields":
         with open(path, encoding="utf-8") as f:
             text = f.read()
-        fm = parse_frontmatter(text)
+        fields, _body, has_valid = parse_frontmatter(text)
+        if not has_valid:
+            return canonical_json({})
         keys = sorted(entry["desired"].keys())
-        return canonical_json({k: fm[k] for k in keys if k in fm})
+        return canonical_json({k: fields[k] for k in keys if k in fields})
     raise InstallerError(f"unknown ownership type: {kind!r}")
 
 
@@ -120,7 +138,7 @@ def render(entry: dict, target_root: str) -> str:
         doc.update(entry["desired"])
         return json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
     if kind == "marked-block":
-        block_id = entry.get("blockId", "pi-pipeline-setup")
+        block_id = entry["blockId"]
         b = MARK_BEGIN.format(block_id=block_id)
         e = MARK_END.format(block_id=block_id)
         text = ""
@@ -136,17 +154,20 @@ def render(entry: dict, target_root: str) -> str:
         if os.path.exists(path):
             with open(path, encoding="utf-8") as f:
                 text = f.read()
-        fm = parse_frontmatter(text)
-        fm.update(entry["desired"])
-        body = text[text.find("\n---", 3) + 4:] if text.startswith("---") and "\n---" in text[3:] else text
-        return render_frontmatter(fm, body)
+        fields, body, has_valid = parse_frontmatter(text)
+        merged = dict(fields)
+        merged.update(entry["desired"])
+        if has_valid:
+            return render_frontmatter(merged, body)
+        # no valid frontmatter: prepend, preserve the entire original text as body
+        return render_frontmatter(merged, text)
     raise InstallerError(f"unknown ownership type: {kind!r}")
 
 
 def detect_unsafe_path(entry: dict, target_root: str) -> Optional[str]:
     """Return a reason string if the managed path (or any existing ancestor) is unsafe."""
     rel = os.path.normpath(entry["path"])
-    if rel.startswith("..") or os.path.isabs(rel):
+    if os.path.isabs(rel) or rel == ".." or rel.startswith(".." + os.sep):
         return "path escapes target root"
     cur = target_root
     for part in rel.split(os.sep):
@@ -168,14 +189,32 @@ class Installer:
         self.backup_dir = os.path.join(target_root, ".pi/blueprint/backups")
         self.staging_dir = os.path.join(target_root, ".pi/blueprint/staging")
         self.entries = manifest.get("entries", [])
-        valid_ownership = ("whole-file", "json-keys", "marked-block", "frontmatter-fields")
         for e in self.entries:
             if not isinstance(e.get("path"), str) or not e.get("path"):
                 raise InstallerError("manifest entry missing 'path'")
-            if e.get("ownership") not in valid_ownership:
+            if e.get("ownership") not in VALID_OWNERSHIP:
                 raise InstallerError(f"unknown ownership type: {e.get('ownership')!r}")
             if "desired" not in e:
                 raise InstallerError(f"manifest entry missing 'desired': {e.get('path')!r}")
+            kind = e["ownership"]
+            desired = e["desired"]
+            if kind in ("whole-file", "marked-block"):
+                if not isinstance(desired, str):
+                    raise InstallerError(f"{kind} entry 'desired' must be a string: {e['path']!r}")
+            else:
+                if not isinstance(desired, dict):
+                    raise InstallerError(f"{kind} entry 'desired' must be an object: {e['path']!r}")
+                if kind == "frontmatter-fields":
+                    for k, v in desired.items():
+                        if not isinstance(k, str) or not isinstance(v, str):
+                            raise InstallerError(f"frontmatter-fields keys/values must be strings: {e['path']!r}")
+            if kind == "marked-block":
+                if not isinstance(e.get("blockId"), str) or not e.get("blockId"):
+                    raise InstallerError(f"marked-block entry missing 'blockId': {e['path']!r}")
+            if not isinstance(e.get("sha256"), str) or len(e.get("sha256", "")) != 64:
+                raise InstallerError(f"manifest entry missing/invalid 'sha256': {e['path']!r}")
+            if e["sha256"].lower() != sha256(desired_canonical(e)):
+                raise InstallerError(f"manifest sha256 mismatch for {e['path']!r}")
         paths = [e["path"] for e in self.entries]
         if len(paths) != len(set(paths)):
             raise InstallerError("duplicate managed path in manifest (collision)")
@@ -233,9 +272,8 @@ class Installer:
         if not actionable:
             return {"ok": True, "applied": [], "txid": None}
 
-        txid = f"tx-{os.getpid()}-{len(os.listdir(self.journal_dir)) if os.path.isdir(self.journal_dir) else 0}"
+        txid = f"tx-{uuid.uuid4().hex}"
         self._append_journal(txid, {"op": "transaction-start", "txid": txid})
-        # back up the applied-state file so recovery can revert it too
         state_backup = None
         state_existed = os.path.exists(self.state_path)
         if state_existed:
@@ -257,13 +295,19 @@ class Installer:
 
             # 1. stage rendered content
             rendered = render(e, self.target_root)
+            post_hash = sha256(rendered.encode())
             staged = os.path.join(self.staging_dir, txid, e["path"].replace("/", "__"))
             os.makedirs(os.path.dirname(staged), exist_ok=True)
             with open(staged, "w", encoding="utf-8") as f:
                 f.write(rendered)
             step()
 
-            # 2. backup current target (if exists)
+            # 2. re-validate safety immediately before backup (TOCTOU)
+            reason = detect_unsafe_path(e, self.target_root)
+            if reason:
+                raise InstallerError(f"unsafe path before backup: {reason}")
+
+            # 3. backup current target (if exists)
             backup = None
             if os.path.exists(path):
                 backup = os.path.join(self.backup_dir, txid, e["path"].replace("/", "__"))
@@ -271,17 +315,23 @@ class Installer:
                 shutil.copy2(path, backup)
             step()
 
-            # 3. write-ahead journal intent (BEFORE mutating the target)
+            # 4. re-validate safety immediately before target mutation (TOCTOU)
+            reason = detect_unsafe_path(e, self.target_root)
+            if reason:
+                raise InstallerError(f"unsafe path before write: {reason}")
+
+            # 5. write-ahead journal intent (BEFORE mutating the target)
             self._append_journal(txid, {"op": "entry", "path": e["path"],
-                                        "backup": backup, "created": backup is None})
+                                        "backup": backup, "created": backup is None,
+                                        "post_hash": post_hash})
             step()
 
-            # 4. write target from staging
+            # 6. write target from staging
             os.makedirs(os.path.dirname(path), exist_ok=True)
             shutil.copy2(staged, path)
             step()
 
-        # 5. commit state (fixed last)
+        # commit state (fixed last)
         new_entries = dict(state["entries"])
         for s in actionable:
             new_entries[s["path"]] = s["hash"]
@@ -323,7 +373,42 @@ class Installer:
                 continue
             if any(r.get("op") in ("transaction-complete", "rolled-back") for r in records):
                 continue
-            # revert applied-state file first
+            entries = [r for r in records if r.get("op") == "entry"]
+            # First detect post-crash user changes (atomic all-or-nothing rollback).
+            conflicts = []
+            rollback = []  # (action, target, record)
+            for r in entries:
+                target = os.path.join(self.target_root, r["path"])
+                cur = None
+                if os.path.exists(target):
+                    with open(target, "rb") as f:
+                        cur = sha256(f.read())
+                post = r.get("post_hash")
+                if r.get("created"):
+                    if cur is None:
+                        continue  # never written
+                    if cur == post:
+                        rollback.append(("remove", target, r))
+                    else:
+                        conflicts.append(r["path"])
+                else:
+                    backup = r.get("backup")
+                    bhash = None
+                    if backup and os.path.exists(backup):
+                        with open(backup, "rb") as f:
+                            bhash = sha256(f.read())
+                    if cur is None:
+                        conflicts.append(r["path"])
+                    elif cur == post:
+                        rollback.append(("restore", target, r))
+                    elif bhash is not None and cur == bhash:
+                        continue  # already original
+                    else:
+                        conflicts.append(r["path"])
+            if conflicts:
+                return {"ok": False, "error": "conflict", "conflicts": conflicts,
+                        "reason": "post-crash changes detected; recovery stopped to preserve user edits"}
+            # revert applied-state file
             sb = next((r for r in records if r.get("op") == "state-backup"), None)
             if sb:
                 if sb.get("existed") and sb.get("backup") and os.path.exists(sb["backup"]):
@@ -332,14 +417,16 @@ class Installer:
                 elif not sb.get("existed"):
                     if os.path.exists(self.state_path):
                         os.remove(self.state_path)
-            for r in reversed([r for r in records if r.get("op") == "entry"]):
-                target = os.path.join(self.target_root, r["path"])
-                if r.get("backup") and os.path.exists(r["backup"]):
-                    os.makedirs(os.path.dirname(target), exist_ok=True)
-                    shutil.copy2(r["backup"], target)
-                elif r.get("created"):
+            # perform rollback (reverse order)
+            for action, target, r in reversed(rollback):
+                if action == "remove":
                     if os.path.exists(target):
                         os.remove(target)
+                else:
+                    backup = r.get("backup")
+                    if backup and os.path.exists(backup):
+                        os.makedirs(os.path.dirname(target), exist_ok=True)
+                        shutil.copy2(backup, target)
             with open(os.path.join(self.journal_dir, name), "a", encoding="utf-8") as f:
                 f.write(json.dumps({"op": "rolled-back"}) + "\n")
             return {"ok": True, "recovered": True, "txid": records[0].get("txid")}
