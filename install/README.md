@@ -27,6 +27,7 @@
 | subagent-расширение | наличие `subagent` tool / расширения | установить или объявить предусловием (*открытое решение*) |
 | OpenSpec CLI | `openspec --version` | `npm install -g @fission-ai/openspec@latest` |
 | OpenSpec в проекте | `openspec context --json` → `root` | `openspec init --tools pi` (только с явного согласия) |
+| Модели для ролей | `pi --list-models` | проверить доступность каждой конкретной модели перед записью в `model:` |
 | Node.js 20.19+ (для OpenSpec) | `node --version` | сообщить пользователю |
 
 ## Что переносится
@@ -35,7 +36,7 @@
 |---|---|
 | `rules/AGENTS.md` | контекст-файл `AGENTS.md` (в корень или `.pi/`) — общие правила |
 | `workflow/orchestrator.md` | инструкция оркестратора (через контекст-файл или промпт-шаблон) |
-| `agents/*.md` | `.pi/agents/*.md` (subagents) |
+| `agents/*.md` | `.pi/agents/*.md` (роли); `model:` заполняется установщиком из конфигурации уровней (`docs/model-configuration.md`) |
 | `skills/**` | `.pi/skills/**` |
 | `prompts/*.md` | `.pi/prompts/*.md` (slash-команды) |
 | `openspec/conventions.md`, `templates/` | справочные конвенции и шаблоны OpenSpec (не копируются в проект; служат инструкциями для агентов) |
@@ -53,3 +54,4 @@
 - Способ дистрибуции: Pi-пакет (`pi install git:...`) vs прямое копирование vs агентная установка.
 - Стратегия мержа `settings.json` и контекст-файлов при конфликтах.
 - Порядок применения профиля из `stacks/`.
+- Точное имя и формат файла переопределений моделей в проекте (предлагается `.pi/blueprint-models.yaml`, TBD).

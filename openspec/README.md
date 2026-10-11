@@ -53,3 +53,16 @@ openspec/
 - Ручное согласование (gate) — между готовыми артефактами и реализацией.
 - Реализация отслеживается по `tasks.md`; архивирование — `openspec archive`.
 - Команды `/opsx:*` поставляются самим OpenSpec через `openspec init --tools pi`; blueprint не дублирует их, а ссылается на них.
+
+### Владение артефактами по ролям
+
+Подготовку OpenSpec распределяют две роли (`docs/roles.md`):
+
+| Артефакт | Роль |
+|---|---|
+| `proposal.md` | `analyst` |
+| `specs/<capability>/spec.md` (дельты) | `analyst` |
+| `design.md` | `architect` |
+| `tasks.md` | `architect` |
+
+Orchestrator создаёт изменение (`openspec new change`) и валидирует (`openspec validate`), но не пишет артефакты сам.
