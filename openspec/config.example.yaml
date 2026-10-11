@@ -2,8 +2,10 @@
 # Источник формата: https://github.com/Fission-AI/openspec (схема spec-driven)
 #
 # Это ШАБЛОН для целевого проекта. Стек-специфичные правила (Java/Spring и т.п.)
-# заполняются при установке из профиля stacks/<name>/openspec/config.yaml,
-# либо вручную. Ядро blueprint остаётся stack-agnostic.
+# могут заполняться вручную или из будущего профиля (предлагаемый, пока
+# отсутствующий путь stacks/<name>/openspec/config.yaml). Этот пример не
+# применяется автоматически и не заменяет существующий config.yaml.
+# Ядро blueprint остаётся stack-agnostic.
 
 schema: spec-driven
 
