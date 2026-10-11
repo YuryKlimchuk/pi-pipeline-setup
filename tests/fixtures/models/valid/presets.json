@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "defaultProfile": "Balanced",
+  "levels": ["cheap", "medium", "expensive"],
+  "profiles": {
+    "Economy": {
+      "orchestrator": "medium", "analyst": "cheap", "architect": "medium",
+      "developer": "cheap", "code-reviewer": "medium", "qa": "cheap", "devops": "cheap"
+    },
+    "Balanced": {
+      "orchestrator": "expensive", "analyst": "medium", "architect": "expensive",
+      "developer": "medium", "code-reviewer": "expensive", "qa": "medium", "devops": "medium"
+    },
+    "Quality": {
+      "orchestrator": "expensive", "analyst": "expensive", "architect": "expensive",
+      "developer": "expensive", "code-reviewer": "expensive", "qa": "expensive", "devops": "expensive"
+    }
+  }
+}

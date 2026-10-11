@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "blueprint": { "revision": "0000000000000000000000000000000000000000", "presetsSha256": "0000000000000000000000000000000000000000000000000000000000000000" },
+  "profile": "Balanced",
+  "levels": {
+    "cheap": { "provider": "acme/cloud", "id": "models/cheap:latest" },
+    "medium": { "provider": "acme", "id": "models/medium:v2.0" },
+    "expensive": { "provider": "acme", "id": "foundation/claude:sonnet" }
+  }
+}

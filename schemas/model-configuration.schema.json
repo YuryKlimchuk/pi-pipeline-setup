@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/YuryKlimchuk/pi-pipeline-setup/schemas/model-configuration.schema.json",
+  "title": "Model configuration contract (blueprint presets or project assignment)",
+  "description": "JSON Schema for the approved D1 model-configuration contract. Validates EITHER a blueprint-presets document (config/models.yaml) OR a project assignment document (.pi/blueprint-models.yaml). Structural validation only: it does not perform semantic resolution and cannot detect duplicate YAML keys (that is a parse-layer concern). All values in examples/fixtures are synthetic; no credentials belong here.",
+  "$defs": {
+    "level": {
+      "type": "string",
+      "enum": ["cheap", "medium", "expensive"]
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["Economy", "Balanced", "Quality"]
+    },
+    "role": {
+      "type": "string",
+      "enum": ["orchestrator", "analyst", "architect", "developer", "code-reviewer", "qa", "devops"]
+    },
+    "subagentRole": {
+      "type": "string",
+      "enum": ["analyst", "architect", "developer", "code-reviewer", "qa", "devops"]
+    },
+    "modelRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "id"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Provider name. Non-empty string; may itself contain '/' and ':' when the provider namespace requires it."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Model identifier stored whole, including '/' and ':'. Never split on '/' and never interpreted as a shell string."
+        }
+      }
+    },
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "level": { "$ref": "#/$defs/level" },
+        "model": { "$ref": "#/$defs/modelRef" }
+      },
+      "oneOf": [
+        { "required": ["level"], "not": { "required": ["model"] } },
+        { "required": ["model"], "not": { "required": ["level"] } }
+      ],
+      "description": "Exactly one of `level` (resolve through the project's levels map) or `model` (direct ModelRef, bypasses level mapping). Absence of an assignment means the profile assignment applies, not an empty model."
+    },
+    "roleLevelMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["orchestrator", "analyst", "architect", "developer", "code-reviewer", "qa", "devops"],
+      "properties": {
+        "orchestrator": { "$ref": "#/$defs/level" },
+        "analyst": { "$ref": "#/$defs/level" },
+        "architect": { "$ref": "#/$defs/level" },
+        "developer": { "$ref": "#/$defs/level" },
+        "code-reviewer": { "$ref": "#/$defs/level" },
+        "qa": { "$ref": "#/$defs/level" },
+        "devops": { "$ref": "#/$defs/level" }
+      }
+    },
+    "blueprintPresets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "defaultProfile", "levels", "profiles"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "defaultProfile": { "$ref": "#/$defs/profile" },
+        "levels": {
+          "const": ["cheap", "medium", "expensive"],
+          "description": "Canonical declaration of the three levels, in order. Always exactly this list."
+        },
+        "profiles": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["Economy", "Balanced", "Quality"],
+          "properties": {
+            "Economy": { "$ref": "#/$defs/roleLevelMap" },
+            "Balanced": { "$ref": "#/$defs/roleLevelMap" },
+            "Quality": { "$ref": "#/$defs/roleLevelMap" }
+          }
+        }
+      }
+    },
+    "projectConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "blueprint", "profile", "levels"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "blueprint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["revision", "presetsSha256"],
+          "properties": {
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Immutable blueprint commit/release digest. Not a floating branch and not 'latest'."
+            },
+            "presetsSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{64}$",
+              "description": "SHA-256 (64 hex chars) of the pinned presets bytes."
+            }
+          }
+        },
+        "profile": { "$ref": "#/$defs/profile" },
+        "levels": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cheap", "medium", "expensive"],
+          "properties": {
+            "cheap": { "$ref": "#/$defs/modelRef" },
+            "medium": { "$ref": "#/$defs/modelRef" },
+            "expensive": { "$ref": "#/$defs/modelRef" }
+          }
+        },
+        "orchestrator": {
+          "$ref": "#/$defs/assignment",
+          "description": "Optional assignment for the main session defaults only."
+        },
+        "subagents": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "analyst": { "$ref": "#/$defs/assignment" },
+            "architect": { "$ref": "#/$defs/assignment" },
+            "developer": { "$ref": "#/$defs/assignment" },
+            "code-reviewer": { "$ref": "#/$defs/assignment" },
+            "qa": { "$ref": "#/$defs/assignment" },
+            "devops": { "$ref": "#/$defs/assignment" }
+          },
+          "description": "Optional per-role overrides for the six subagent roles only. The key `orchestrator` is not allowed here."
+        }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/blueprintPresets" },
+    { "$ref": "#/$defs/projectConfig" }
+  ]
+}

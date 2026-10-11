@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "blueprint": { "revision": "0000000000000000000000000000000000000000", "presetsSha256": "0000000000000000000000000000000000000000000000000000000000000000" },
+  "profile": "Quality",
+  "levels": {
+    "cheap": { "provider": "example", "id": "example/cheap:1" },
+    "medium": { "provider": "example", "id": "example/medium:1" },
+    "expensive": { "provider": "example", "id": "example/expensive:1" }
+  },
+  "orchestrator": { "level": "expensive" },
+  "subagents": {
+    "developer": { "model": { "provider": "example", "id": "example/dev-override:2" } },
+    "qa": { "level": "cheap" }
+  }
+}
