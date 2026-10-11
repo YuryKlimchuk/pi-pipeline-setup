@@ -63,3 +63,52 @@ P0 (решения D1–D6 утверждены) и P1 (матрица совм�
 - **Связь с P2:** задача 5.2 (`model-configuration-contract`) остаётся открытой до независимого review; её открытость не блокирует независимое offline-проектирование Track B.
 
 <!-- Gate A ожидает явного одобрения пользователя. Раздел "Blueprint approvals" добавляется только после решения (append-only, D6). -->
+
+<!-- BEGIN: Blueprint approvals -->
+<!-- Служебный раздел журнала согласований. Исключается из digest proposal.md (D6). Append-only; исправление — новая запись со ссылкой `supersedes`. -->
+
+## Blueprint approvals
+
+### Record ga-20261011-002 — Human Gate A (accept, строго ограниченный scope)
+
+| Поле | Значение |
+|---|---|
+| record-id | `ga-20261011-002` |
+| time | 2026-10-11T17:18:07+03:00 |
+| change | `installer-agent-role-poc` |
+| root | `/home/yury/projects/java/pi-pipeline-setup` |
+| gate | A |
+| decision | `accept` (строго ограниченный scope) |
+| git revision | `50348eea47c900d7ec4af913433eebbe987a3d52` |
+| reviewer | саморевью первичного Orchestrator (НЕ независимое; независимый Reviewer/QA — на Gate B) |
+
+**Цитата решения пользователя:** «I approve Gate A for change `installer-agent-role-poc`, with the following strict scope and conditions.» … «Authorize only: tasks 3.1–3.10: offline implementation and tests of installer primitives; task 0.2: baseline collection for the disposable project, limited to the project-local state needed for Track B. No other tasks are authorized by this approval.»
+
+**Принятый scope:** только задачи `0.2` (baseline disposable-проекта) и `3.1–3.10` (офлайн-реализация и тесты примитивов установщика). Никакие другие задачи не авторизованы.
+
+**Явные исключения (НЕ авторизовано):** Track A `1.x`/`2.x` (в т.ч. офлайн discovery и эксперименты с ролями/резолвом моделей); gated/live `4.x`; приёмка/отчётность `5.x`, Gate B, архивирование OpenSpec; `0.1`/`0.3` в части subagent-кандидата и внешних побочных эффектов за пределами project-local baseline; установка/подключение/выполнение S3 или S4; live-модельные/API-запросы; изменение trust/глобальной конфигурации Pi/permissions/существующих пользовательских данных; запись вне disposable-project root; Git commit/push/reset/изменение истории.
+
+**skip_specs: true — рассмотрено и принято.** Причина: PoC меняет tooling (fixtures/процедура), а не runtime-поведение продукта; «нет изменения поведения → нет спеки» (`openspec/conventions.md`).
+
+**Условия реализации (из решения пользователя):**
+1. PoC-manifest остаётся явно provisional; не выдаётся за финальный контракт D3/P6a.
+2. Сохранять пользовательские файлы; безопасный отказ при конфликтах, symlink-escape, permission-ошибках, неоднозначном ownership.
+3. Реализовать staging, backup, journal, идемпотентные повторы и crash-recovery тесты в рамках scope.
+4. Не расширять scope без отдельного одобрения.
+5. P2 task 5.2 остаётся открытой; P2 не объявляется принятым.
+6. Зафиксировать `skip_specs: true` и обоснование (tooling, не product-runtime).
+
+**Snapshot (Gate A):** `c656c16cf8d64a4aefcd814b787c9bbe97ee4a4e7990bb78aca2fe7d82ae4034` — SHA-256 над упорядоченным manifest `sha256 size path` (provisional-формат; формальная сериализация — в P5):
+
+- `1e37a77797feae14d9a5bfdde8adcb9e0bb8689d350c35e9897c84b76d3e4691  8989  openspec/changes/installer-agent-role-poc/proposal.md` (тело без этого раздела)
+- `977a4b290bff4f462266204f92d8103744e5d4368d8028a65fd675a2867941c7  18089  openspec/changes/installer-agent-role-poc/design.md`
+- `cbed60f01e461ad026c2a80e68c1f085cc5115c03a5f29c25850523b11873db5  10821  openspec/changes/installer-agent-role-poc/tasks.md`
+- `a7fdc6c6efa3596a5399daac645701c99f1f6d02a0583674f2b07430b0892f75  470  openspec/changes/installer-agent-role-poc/.openspec.yaml`
+- `f0082e9c22e8ce1d611c0f3b4d4915ce445e7ff2553cda6b713b6c25f390984c  998  openspec/config.yaml`
+- отсутствуют (опциональные): `openspec/changes/installer-agent-role-poc/specs/**` (skip_specs).
+
+**Evidence:** отсутствует на Gate A (до реализации; тесты — в рамках реализации, независимый review — на Gate B).
+
+**Замечания:** нет открытых блокеров.
+
+<!-- END: Blueprint approvals -->
