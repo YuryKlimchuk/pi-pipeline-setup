@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-10-11
+goal: Зафиксировать контракт модельной конфигурации (schema, synthetic fixtures,
+  правила валидации) по утверждённому D1; без генератора и runtime-применения.
+skip_specs: true

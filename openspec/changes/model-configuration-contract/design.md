@@ -1,0 +1,81 @@
+# Design
+
+## Context
+
+D1 утверждён: два декларативных источника с разными обязанностями и явное применение без watcher. P1 статически подтвердил, что Pi не читает YAML blueprint и что локальное расширение subagent (S3) и пример (S4) различаются — формат является внутренним контрактом blueprint, а не runtime-входом Pi. Потребитель schema — будущий resolver/генератор (P4) и валидаторы; сейчас исполняемого потребителя в репозитории нет. Поэтому P2 создаёт только контракт и синтетические fixtures, без runtime-кода.
+
+## Goals / Non-Goals
+
+**Goals:**
+- Один JSON Schema `schemas/model-configuration.schema.json` для обоих видов документов.
+- Точное разделение трёх уровней: schema-валидация (структура) / семантическая валидация (назначения) / runtime-разрешение (эффективные provider/ID).
+- Детерминированные ошибки; никакого молчаливого fallback модели/провайдера/уровня.
+- Синтетические fixtures без секретов и реальных ID.
+
+**Non-Goals:**
+- Рабочие `config/models.yaml` и `.pi/blueprint-models.yaml`.
+- Модельные пресеты с реальными ID.
+- Resolver, генератор, установщик, определения ролей.
+- Live PoC, API-запросы, установка зависимостей.
+
+## Decisions
+
+### D-1. Один schema-файл с двумя подсхемами
+
+`schemaVersion: 1`. Корневой `oneOf` различает документы по обязательным полям:
+- пресеты blueprint: `profiles` (обязателен), `defaultProfile`, `levels` (ровно `[cheap, medium, expensive]`);
+- проектный источник: `blueprint` (обязателен), `profile`, `levels` (map уровня → `ModelRef`), опциональные `orchestrator` и `subagents`.
+
+Общие `$defs` (profile/level/role/subagentRole/ModelRef/Assignment/roleLevelMap) переиспользуются обеими подсхемами. Альтернатива «два файла» отклонена: план P2 называет один путь `schemas/model-configuration.schema.json`, а переиспользование `$defs` исключает дублирование перечислений.
+
+### D-2. Три уровня проверки
+
+1. **Schema-валидация** — типы, `enum` профилей/ролей/уровней, `required`, `additionalProperties: false`, `oneOf` для `Assignment`. Не доказывает семантическую корректность.
+2. **Семантическая валидация** — согласованность профиля/уровней/назначений и правил приоритетов. Документируется здесь; исполняется будущим resolver (P4), не JSON Schema.
+3. **Runtime-разрешение** — выбор эффективного provider/ID по профилю + overrides. Только P4.
+
+Валидный JSON/YAML не считается доказательством семантической корректности или исполнимости.
+
+### D-3. Канонические перечисления
+
+- `profile` ∈ `Economy`, `Balanced`, `Quality`.
+- `level` ∈ `cheap`, `medium`, `expensive`.
+- Семь канонических ролей: `orchestrator` + шесть subagent-ролей `analyst`, `architect`, `developer`, `code-reviewer`, `qa`, `devops`.
+- `subagents` допускает только шесть subagent-ролей; ключ `orchestrator` в `subagents` запрещён. Основная сессия настраивается только полем `orchestrator`.
+
+### D-4. ModelRef и Assignment
+
+- `ModelRef`: непустые строки `provider` и `id`; `id` хранится целиком, включая `/` и `:`, без разбиения по `/` и без shell-интерпретации.
+- `Assignment`: ровно одно из `{level}` либо `{model: ModelRef}` (schema: `oneOf` + `additionalProperties: false`, `minProperties: 1`); отсутствие назначения означает «профиль», а не пустую модель.
+
+### D-5. Overrides и приоритет
+
+Разрешение: профиль → `orchestrator`/`subagents` override → сопоставление уровня → итоговый `ModelRef`. Постоянный ручной выбор — правка override в проектном источнике + повторное применение. `orchestrator` override относится только к defaults основной сессии.
+
+### D-6. Duplicate keys
+
+JSON Schema не обнаруживает дубли ключей (JSON-парсер их теряет). Правило: YAML-загрузчик обязан отклонять дубли до schema-валидации (unique-keys). Это parse-level правило — документируется и проверяется fixture, но не выражается в JSON Schema.
+
+### D-7. Ошибки и неизвестные поля
+
+- `schemaVersion` ≠ 1 → ошибка, без попытки миграции.
+- Неизвестные поля (`additionalProperties: false`), роли, профили, уровни → ошибка, без игнорирования.
+- `blueprint.revision` — непустая строка (не плавающая ветка/`latest`); `blueprint.presetsSha256` — ровно 64 hex-символа.
+- `levels` проектного источника: ровно три ключа `cheap`/`medium`/`expensive`, каждый — `ModelRef`.
+- Ошибки детерминированы, без fallback.
+
+## Risks / Trade-offs
+
+- [JSON Schema не ловит duplicate keys] → правило на уровне YAML-загрузчика + fixture `invalid/duplicate-keys.yaml`.
+- [Schema ≠ семантика] → три уровня явно задокументированы; валидный документ не объявляется исполнимым.
+- [Расхождение с канонической таблицей] → fixtures сверяют семь ролей × три профиля с `docs/model-configuration.md`.
+- [YAML-специфика] → ограничить JSON-совместимыми типами; custom tags/aliases/merge keys запрещены (правило загрузчика).
+- [Секреты] → только синтетические fixtures; в schema нет полей для ключей/учётных данных.
+
+## Migration Plan
+
+Формат новый (`schemaVersion: 1`) — миграции нет. Будущие версии: bump `schemaVersion`, отказ от неизвестной версии без автоматической миграции.
+
+## Open Questions
+
+Блокирующих нет: поля и приоритеты заданы утверждённым D1. Любое изменение согласованных приоритетов возвращается пользователю на Gate A.
