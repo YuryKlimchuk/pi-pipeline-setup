@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "provisional": true,
+  "comment": "PROVISIONAL PoC manifest for installer primitives. NOT the final D3/P6a contract. All values synthetic.",
+  "entries": [
+    {
+      "path": "config/app.json",
+      "ownership": "json-keys",
+      "desired": {
+        "defaultProvider": "example",
+        "defaultModel": "example/model:1"
+      },
+      "sha256": "ecd6421d5fa1b393163a73c6d74db17529469760f7189f82c9d098af93f5be51"
+    },
+    {
+      "path": "AGENTS.md",
+      "ownership": "marked-block",
+      "blockId": "pi-pipeline-setup",
+      "desired": "# Managed block\nRead docs/workflow.md before changes.",
+      "sha256": "f1e4ee8a636945a521e9b3347838ced27aa584f42549d363033ae686098dfe1e"
+    },
+    {
+      "path": ".pi/agents/developer.md",
+      "ownership": "frontmatter-fields",
+      "desired": {
+        "model": "example/dev:1"
+      },
+      "sha256": "3990798efdc4f3148aebe003bb01f0db7a90beb6c0e1f571db04ca685c5200d3"
+    },
+    {
+      "path": "rules/README.md",
+      "ownership": "whole-file",
+      "desired": "Synthetic rule file.\n",
+      "sha256": "f1640fde0ad08b6942825b8d63decf252a25077460e08d580f143bb31f630aef"
+    }
+  ]
+}
