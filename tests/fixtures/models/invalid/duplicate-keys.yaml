@@ -1,0 +1,19 @@
+# SYNTHETIC fixture. Demonstrates a duplicate YAML key, which is a parse-layer
+# concern: JSON Schema cannot detect it. A strict YAML loader MUST reject this
+# document before schema validation.
+schemaVersion: 1
+blueprint:
+  revision: "0000000000000000000000000000000000000000"
+  presetsSha256: "0000000000000000000000000000000000000000000000000000000000000000"
+profile: Balanced
+levels:
+  cheap:
+    provider: example
+    provider: example-duplicate
+    id: c
+  medium:
+    provider: example
+    id: m
+  expensive:
+    provider: example
+    id: e

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "blueprint": { "revision": "0000000000000000000000000000000000000000", "presetsSha256": "0000000000000000000000000000000000000000000000000000000000000000" },
+  "profile": "Premium",
+  "levels": {
+    "cheap": { "provider": "example", "id": "c" },
+    "medium": { "provider": "example", "id": "m" },
+    "expensive": { "provider": "example", "id": "e" }
+  }
+}
